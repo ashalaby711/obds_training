@@ -34,5 +34,7 @@ hist(norm_dist2, breaks=50)
 par(mfrow = c(2, 1))
 hist(norm_dist, breaks=50)
 hist(norm_dist2, breaks=50)
-par(mfrow = c(1, 1))
+par(mfrow = c(1, 1)) #resetting plotting window to 1 graph
+
+
 
