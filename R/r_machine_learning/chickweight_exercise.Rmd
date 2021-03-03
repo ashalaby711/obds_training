@@ -1,0 +1,105 @@
+---
+title: "Chick weight exerceise"
+author: "Ahmed"
+date: "02/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+View(ChickWeight)
+```
+Fit a linear model to measure the effect of Time and Diet in the ChickWeight data set
+
+```{r}
+lm(weight ~ Time + Diet, ChickWeight)
+```
+plot it
+
+```{r}
+lm_plot <- ggplot(ChickWeight, aes(Time, weight, color=Diet)) +
+    geom_point()+
+    stat_smooth(method = "lm")
+lm_plot
+```
+
+```{r}
+lm(weight ~ Time, ChickWeight)
+```
+#the above eans that the weight at point 0 in time is 27.5 (grams) and for every increase in time unit (day) the chicks gained 8.8 grams
+
+```{r}
+lm_plot <- ggplot(ChickWeight, aes(Time, weight)) +
+    geom_point()+
+    stat_smooth(method = "lm")+
+    geom_abline(slope = 8.803, intercept = 27.467)
+lm_plot
+```
+# slope is the the rate of change and intercept is the value at point 0
+# we can now define the intercept to be diet 1, so all other diets will compare to 1 instead of zero
+
+```{r}
+lm(weight ~ Diet, ChickWeight)
+```
+#The coefficient means that Diet2 is 19.97 grams higher than Doet 1 at any point in time
+
+```{r}
+ggplot(ChickWeight, aes(Diet, weight))+
+    geom_boxplot()+
+    geom_point()
+```
+
+
+Which diet leads to the fastest increase in body weight?
+-diet 3
+```{r}
+lm(weight ~ Diet * Time, ChickWeight)
+```
+
+
+```{r}
+lm_plot <- ggplot(ChickWeight, aes(Time, weight, color=Diet)) +
+    geom_point()+
+    stat_smooth(method = "lm")
+lm_plot
+
+```
+
+How much does weight increase per unit of Time for the top diet?
+- 4.5811 (Diet1 intercept) + 6.8418 (Diet3 slope)
+
+#for sanity check!:
+```{r}
+ggplot(ChickWeight, aes(Time, weight, color=Diet)) +
+    geom_point()+
+    stat_smooth(method = "lm")+
+    geom_abline(slope = 6.8418+4.5811, intercept = 30.9310-12.6807)
+```
+
+Does the top diet drive an increase in body weight that is significantly faster than the next best diet?
+ #to nswer this we need run summary()
+
+```{r}
+chickweight_lm_fit <- lm(formula = weight ~ Diet * Time, data = ChickWeight)
+summary(chickweight_lm_fit)
+```
+
+#One way is to relevel the intercept to diet 4 (2nd highest increase in weight), then re-run the model
+```{r}
+ChickWeight$Diet <- relevel(ChickWeight$Diet, "4")
+chickweight_lm_fit <- lm(formula = weight ~ Time * Diet, data = ChickWeight)
+summary(chickweight_lm_fit)
+
+```
+#Check if the model is working
+
+```{r}
+predict(chickweight_lm_fit, tibble(Time=5, Diet="3"))
+```
+
+
+
+

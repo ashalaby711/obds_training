@@ -1,0 +1,204 @@
+---
+title: "PCA"
+author: "Ahmed"
+date: "01/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Read the file
+
+```{r}
+logcounts <- read.csv("data/logcounts.csv", row.names = 1)
+```
+
+```{r}
+library(tidyverse)
+```
+Check the type of the datastructure
+
+```{r}
+str(logcounts)
+```
+Chate the dataframe to a matrix
+
+```{r}
+logcounts_matrix <- data.matrix(logcounts, rownames.force = NA)
+```
+
+```{r}
+str(logcounts_matrix)
+```
+```{r}
+logcounts.pca <- prcomp(logcounts_matrix, center = TRUE, scale. = TRUE)
+summary(logcounts.pca)
+```
+
+```{r}
+str(logcounts.pca)
+```
+We want to rotate to cluster on the samples not the genes
+We need to transpose the data
+
+```{r}
+transposed_logcounts <-  t(logcounts_matrix)
+str(transposed_logcounts)
+```
+Then run the PCA again on the transposed data
+
+```{r}
+transposed_logcounts.pca <- prcomp(transposed_logcounts, center = TRUE, scale. = FALSE)
+str(transposed_logcounts.pca)
+```
+Now the rotation: has GeneID and PC1, PC2, etc
+and the $X given the coordinate of each cell relative to PC1, PC2,..etc
+
+Now we areusing the view funciton to view the coordinates
+```{r}
+View(transposed_logcounts.pca$x)
+```
+
+Draw a scatter plot of the top 2 principal components and colour 
+
+```{r}
+library(ggplot2)
+cell_metadata <- read.csv("data/cell_metadata.csv")
+View(cell_metadata)
+
+```
+
+```{r}
+logcounts_pca_as_df <- as.data.frame(transposed_logcounts.pca$x[,1:2])
+View(logcounts_pca_as_df)
+logcounts_pca_as_df$Sample <- rownames(logcounts_pca_as_df) 
+#logcounts_pca_as_df
+
+cellandcounts <- logcounts_pca_as_df %>%
+    left_join(cell_metadata, by = c("Sample" = "Sample" ))
+
+
+
+infection_plot <- ggplot(data = cellandcounts, aes(x=PC1, y=PC2, col=Infection))+
+    geom_point()
+status_plot <- ggplot(data = cellandcounts, aes(x=PC1, y=PC2, col=Status))+
+    geom_point()
+time_plot <- ggplot(data = cellandcounts, aes(x=PC1, y=PC2, col=Time))+
+    geom_point()
+```
+Plotting as a grid
+
+```{r}
+library(cowplot)
+plot_grid(infection_plot, status_plot, time_plot, labels= c("Infection", "Status", "Time"), ncol = 1, nrow = 3)
+
+```
+Draw a density plot
+
+```{r}
+infection_dplot <- ggplot(data = cellandcounts, aes(x=PC1, col=Infection))+
+    geom_density()
+status_dplot <- ggplot(data = cellandcounts, aes(x=PC1, col=Status))+
+    geom_density()
+time_dplot <- ggplot(data = cellandcounts, aes(x=PC1, col=Time))+
+    geom_density()
+infection_dplot
+status_dplot
+time_dplot
+```
+Facet plots
+Draw a density plot, faceted by time and infection, colored by status, to inspect the variance of each
+experimental factor on the top principal component
+
+```{r}
+facet_plot <- ggplot(cellandcounts, aes(x=PC1, col=Status))+
+    geom_density()+
+    facet_grid(rows = vars(Infection), cols = vars(Time))
+facet_plot
+
+```
+Draw a bar plot of variance explained by each principal component. How many principal components
+would you keep for downstream analyses?
+
+```{r}
+variance_table <- data.frame(variance= (transposed_logcounts.pca$sdev)^2)
+variance_table$fraction <- variance_table$variance/sum(variance_table$variance)
+PC_numbers <- seq(1,nrow(variance_table))
+variance_table$PC <- PC_numbers
+variance_table <- variance_table %>%
+    select(PC, variance, fraction)
+View(variance_table)
+```
+plotting
+
+```{r}
+variance_plotting <- ggplot(variance_table, aes(x=PC, y=fraction))+
+    geom_col()+
+    xlim(0,15)
+variance_plotting
+```
+Find the names of the top genes associated with the principal components
+
+```{r}
+gene_influence <- as.data.frame(transposed_logcounts.pca$rotation)
+gene_influence$gene_ID <- row.names(gene_influence)
+
+temp <- gene_influence %>%
+    arrange(desc(PC1)) %>%
+    select(gene_ID, PC1)
+View(temp)
+```
+Visualise the gene expression value of the gene with the highest loading for PC1 as color on a scatter
+plot of PC1 and PC2. What do you observe?
+
+```{r}
+ENSG00000172183 <- as.numeric(logcounts["ENSG00000172183",])
+ENSG00000172183
+
+cellandcounts$ENSG00000172183 <- ENSG00000172183
+
+gene_expression_plot <- ggplot(cellandcounts, aes(x=PC1, y=PC2, col=ENSG00000172183))+
+    geom_point()
+gene_expression_plot
+```
+Compare PCA to t-SNE to UMAP. Note that t-SNE and UMAP should be given the subset of principal
+components selected above.
+
+```{r}
+library(umap)
+
+subset_logcounts.pca <- transposed_logcounts.pca$x[,1:15]
+
+View(subset_logcounts.pca)
+logcount_umap <- umap(subset_logcounts.pca)
+logcount_umap_layout <- as.data.frame(logcount_umap$layout)
+logcount_umap_layout$Sample <- rownames(logcount_umap_layout)
+View(logcount_umap_layout)
+
+logcount_umap_layout_metadata <- logcount_umap_layout %>%
+    left_join(cell_metadata)
+View(logcount_umap_layout_metadata)
+
+umap_plot <- ggplot(logcount_umap_layout_metadata, aes(x=V1, y=V2, col = Time))+
+    geom_point()
+umap_plot
+
+```
+
+
+```{r}
+out_kmeans <- kmeans(x= transposed_logcounts.pca$x[,1:25], centers=4)
+out_kmeans
+```
+```{r}
+str(out_kmeans)
+```
+```{r}
+ggplot(kmeans_scree, aes(k, withinss_sum)) +
+    geom_line(linetype = "F1") +
+    geom_point() +
+    labs(title = "sum(withinss)") +
+    cowplot::theme_cowplot()
+```
+

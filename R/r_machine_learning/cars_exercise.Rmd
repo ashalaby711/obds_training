@@ -1,0 +1,27 @@
+---
+title: "Machine Learning"
+author: "Ahmed"
+date: "02/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+```
+```{r}
+cars_lm_fit <- lm(dist ~ speed, cars)
+
+gg <- ggplot(cars, aes(speed, dist)) +geom_point() +
+    stat_smooth(method = "lm", fullrange=TRUE) +
+    geom_point(aes(Speed, Dist), color = "red", tibble(Speed = c(1, 2, 5, 10, 20, 50), Dist = predict(cars_lm_fit, tibble(speed = c(1, 2, 5, 10, 20, 50))))) +
+
+xlim(xlim = c(0, NA))
+
+gg
+```
+

@@ -1,0 +1,90 @@
+---
+title: "caret_exercise"
+author: "Ahmed"
+date: "02/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+```
+
+
+```{r}
+set.seed(998)
+inTraining <- createDataPartition(iris$Species, p=0.75, list=FALSE)
+training <- iris[ inTraining,]
+testing <- iris[-inTraining,]
+
+dim(iris)
+dim(training)
+```
+```{r}
+install.packages("e1071")
+library(e1071)
+fitControl <- trainControl(method = "boot", number=5)
+knnFit <- train(Species~., data = training, method= "knn", trControl = fitControl, tuneGrid=data.frame(k=c(1,2,5,10,20)))
+```
+
+```{r}
+ggplot(knnFit)
+```
+```{r}
+View(iris)
+```
+
+
+```{r}
+iris_df <- stack.data.frame(iris)
+caret::featurePlot(x= iris[,1:4], y=iris_df$Species, plot= "box")
+```
+Partition the data set into one training and one test set. Make sure the two sets are balanced with respect to Species
+
+```{r}
+set.seed(998)
+inTraining <- createDataPartition(iris$Species, p=0.75, list=FALSE)
+training <- iris[ inTraining,]
+testing <- iris[-inTraining,]
+```
+
+#Set training parameters
+#the next chunk will generate a prediction model 
+
+```{r}
+fitControl <- trainControl(method = "boot", number=5)
+
+install.packages("party")
+
+library(party)
+
+modelLookup("cforest")
+
+mtryFit <- train(Species~., data = training, method= "cforest", trControl = fitControl, tuneGrid= data.frame(mtry= c(1,2,3,4)))
+
+
+ggplot(mtryFit)
+
+irisPredict <- predict(mtryFit, testing)
+confusionMatrix(irisPredict, testing$Species)
+```
+
+
+```{r}
+modelLookup("avNNet")
+
+avNNetFit <- train(x=training[,1:4], y=training[,5], method = "avNNet", tuneGrid = expand.grid(data.frame(size=c(1,2,5), decay=c(0.1,0.5,1), bag=c(10,20,50))))
+
+ggplot(avNNetFit)
+```
+```{r}
+modelLookup("avNNet")
+
+avNNetFit2 <- train(x=training[,1:4], y=training[,5], method = "avNNet", tuneGrid = expand.grid(size=c(1,2,5), decay=c(0.1,0.5,1), bag=c(10,20,50)))
+
+ggplot(avNNetFit2)
+```
+

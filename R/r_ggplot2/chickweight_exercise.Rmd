@@ -1,0 +1,72 @@
+---
+title: "Chickweight exercise"
+author: "Ahmed"
+date: "24/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+View the ChickWeight data
+```{r}
+View(ChickWeight)
+```
+
+```{r}
+ggplot(ChickWeight, aes(x=weight))+
+  geom_histogram()
+```
+
+```{r}
+ggplot(ChickWeight, aes(x=weight))+
+  geom_histogram(fill="grey", color="black", binwidth=5)
+```
+```{r}
+ggplot(ChickWeight, aes(x=weight))+
+  geom_histogram(fill="grey", color="black", binwidth=5)+
+  labs(x= "Chick weight", y="Number of chicks", title= "Histogram of chicks weight", subtitle="Chick weight dataset")+
+  theme(axis.title = element_text(size=16, face="bold"), axis.text.x = element_text(size=14, angle = 30, hjust = 1, colour = "red"))+
+  ylim(0,50)
+```
+#facet wrap
+☺
+```{r}
+Plot_A <- ggplot(ChickWeight, aes(x=weight, fill=Diet))+
+  geom_histogram(color="black", binwidth=5)+
+  labs(x= "Chick weight", y="Number of chicks", title= "Histogram of chicks weight", subtitle="Chick weight dataset")+
+  theme(axis.title = element_text(size=16, face="bold"), axis.text.x = element_text(size=14, angle = 30, hjust = 1, colour = "red"))+
+  facet_wrap(~Diet, nrow=4, scales="free_y")
+```
+#Scatterplot
+
+```{r}
+diet_colours <- c("1"="blue", "3"="red", "2"="orange", "4"="green")
+Plot_B <- ggplot(ChickWeight, aes(y=weight, x=Time, color=Diet))+
+  geom_point()+
+  geom_smooth()+
+  scale_color_manual(values=diet_colours)
+```
+
+```{r}
+Plot_B
+```
+
+
+```{r}
+Plot_A
+```
+
+```{r}
+Plot_B
+```
+#plotting both together in 2 panels
+
+```{r}
+renv::install('cowplot')
+library(cowplot)
+plot_grid(Plot_A, Plot_B, labels = c('A', 'B'), ncol =2, nrow = 1)
+```
+
+
