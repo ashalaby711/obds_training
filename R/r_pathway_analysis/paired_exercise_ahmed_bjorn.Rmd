@@ -1,0 +1,186 @@
+---
+title: "Pathway analysis"
+author: "Ahmed"
+date: "04/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Read the files
+merged table is the universe or the genes that have been analysed
+the filtered gene table is the list of table that has statistically significant over expressed genes
+```{r}
+merged_table <- read.csv("data/KO_CD8_vs_KO_CD4.csv")
+filtered_table <- read.csv("data/sig_DE_genes.csv")
+
+#convert row names to ENSEMBL ID for both tables
+row.names(merged_table) <- merged_table$ENSEMBL_ID
+row.names(filtered_table) <- filtered_table$ENSEMBL_ID
+
+str(merged_table)
+```
+
+1st step is to convert ENSEML into geneIDs
+
+```{r}
+#loading the database to get different IDs for the genes
+library(org.Mm.eg.db)
+View(org.Mm.eg.db)
+
+
+#get the entrezid from ensemble id for both tables needed by enrichGO function
+
+mapids_merged <- mapIds(x=org.Mm.eg.db, keys = row.names(merged_table), column = "ENTREZID", keytype = "ENSEMBL")
+
+mapids_filtered <- mapIds(x=org.Mm.eg.db, keys = row.names(filtered_table), column = "ENTREZID", keytype = "ENSEMBL")
+
+#convert to a data frame to ...?
+
+entrez_merged <- as.data.frame(mapids_merged)
+
+entrez_merged <- as.numeric(entrez_merged$mapids_merged)
+
+entrez_filtered <- as.data.frame(mapids_filtered)
+
+entrez_filtered <- as.numeric(entrez_filtered$mapids_filtered)
+
+head(entrez_merged)
+head(entrez_filtered)
+
+```
+
+```{r}
+#compares the filtered genes to the database to identify enriched pathways
+
+library(clusterProfiler)
+ego <- enrichGO(gene          = entrez_filtered,
+                universe      = entrez_merged,
+                OrgDb         = org.Mm.eg.db,
+                ont           = "ALL",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.05,
+        readable      = TRUE)
+head(ego)
+
+dotplot(ego, showCategory=20)
+```
+Run Kegg
+
+```{r}
+#Kegg is similar to enrichGO but different database and uses different gene identification (UNIPROT)
+
+keytypes(org.Mm.eg.db)
+
+
+kegg_merged <- mapIds(x=org.Mm.eg.db, keys = row.names(merged_table), column = "UNIPROT", keytype = "ENSEMBL")
+
+kegg_filtered <- mapIds(x=org.Mm.eg.db, keys = row.names(filtered_table), column = "UNIPROT", keytype = "ENSEMBL")
+
+kegg_merged <- as.data.frame(kegg_merged)
+
+kegg_merged <- as.numeric(kegg_merged$kegg_merged)
+
+kegg_filtered <- as.data.frame(kegg_filtered)
+
+kegg_filtered <- as.numeric(kegg_filtered$kegg_filtered)
+
+head(kegg_merged)
+head(kegg_filtered)
+```
+```{r}
+#The output is different because it is much smaller than enrichGO and is also outdated
+
+kk <- enrichKEGG(gene         = entrez_filtered,
+                 universe = entrez_merged,
+                 organism     = 'mmu',
+                 pvalueCutoff = 0.05,
+                 pAdjustMethod = "BH")
+head(kk)
+
+dotplot(kk, showCategory=20)
+```
+EGO3
+
+
+
+```{r}
+#we need to filter and order the large analysed genes for gseGO ? not the fitered gene
+
+filtered_sorted_geneList <- merged_table[order(merged_table$log2FoldChange, decreasing = TRUE), ]
+#we can use duplicated to get rid of duplicates
+#which(is.na(filtered_sorted_geneList$mapids))
+View(filtered_sorted_geneList)
+
+filtered_sorted_geneList <- filtered_sorted_geneList[!duplicated(filtered_sorted_geneList$temp), ]
+
+filtered_sorted_geneList <- filtered_sorted_geneList[!is.na(filtered_sorted_geneList$temp), ]
+
+which(is.na(filtered_sorted_geneList$temp))
+
+filtered_geneList = filtered_sorted_geneList[, 4]
+
+names(filtered_geneList) = as.character(filtered_sorted_geneList[, 2])
+str(filtered_geneList)
+View(filtered_geneList)
+
+#gseGO similar to the above but compares all the analysed genes to a database?
+
+ego3 <- gseGO(geneList     = filtered_geneList,
+              keyType = "SYMBOL",
+              OrgDb        = org.Mm.eg.db,
+              ont          = "BP",
+              minGSSize    = 100,
+              maxGSSize    = 500,
+              pvalueCutoff = 0.05,
+              verbose      = FALSE)
+
+head(ego3)
+```
+
+To ask Lucy
+```{r}
+
+p1 <- cnetplot(ego3, foldChange=filtered_geneList)
+p1
+## categorySize can be scaled by 'pvalue' or 'geneNum'
+p2 <- cnetplot(ego3, categorySize="pvalue", foldChange=filtered_geneList)
+p3 <- cnetplot(ego3, foldChange=filtered_geneList, circular = TRUE, colorEdge = TRUE)
+p2
+p3
+library(cowplot)
+
+compiled_plot <- plot_grid(p1, p2, p3, labels = c('A', 'B', "C"))
+```
+
+
+```{r}
+#This is gseKEGG compares the full analysed gene list to the organism, but uses ENTREZID
+
+kk2_table <- filtered_sorted_geneList
+row.names(kk2_table) <- kk2_table$ENSEMBL_ID
+
+kk2_table$entrezid <- mapIds(x = org.Mm.eg.db, keys = row.names(kk2_table), column = "ENTREZID", keytype = "ENSEMBL")
+
+kk2_geneList <- kk2_table[,4]
+names(kk2_geneList) = as.character(kk2_table[,6])
+
+kk2_geneList
+
+kk2 <- gseKEGG(geneList = kk2_geneList,
+               organism = "mmu",
+               pvalueCutoff = 0.05,
+               pAdjustMethod = "BH",
+               verbose = FALSE)
+
+head(kk2)
+
+dotplot(kk2)
+
+ridgeplot(kk2)
+
+```
+
+
