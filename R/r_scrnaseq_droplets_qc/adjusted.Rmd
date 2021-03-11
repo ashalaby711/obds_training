@@ -1,0 +1,159 @@
+---
+title: "droplets"
+author: "Ahmed"
+date: "10/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(DropletUtils)
+
+sce <- read10xCounts("data/pbmc_1k_v3_raw/", sample.names = "PBMC")
+
+View(as.data.frame(colData(sce)))
+
+library(scDblFinder)
+```
+#Now get rid of empty droplets
+Remove cells with no counts
+
+```{r}
+assay(sce, "counts")
+
+sums <- colSums(assay(sce, "counts"))
+
+sums
+
+sce <- sce[,sums>0]
+
+sce
+```
+#emptyDrops needs a numeric object
+```{r}
+emptyDroplets <- emptyDrops(assay(sce, "counts"))
+
+emptyDroplets
+
+is.cell <- emptyDroplets$FDR <= 0.01
+sum(is.cell, na.rm = TRUE)
+```
+Draw plots comparing empty droplets and other droplets (e.g., library size, mitochondrial content, PCA).
+#first we need a dataframe. results are: FLASE is background (empty cell). TRUE is a cell significantly different from background. NA:
+
+```{r}
+df <- data.frame(librarysize = colSums(assay(sce, "counts")), empty_droplet = is.cell)
+df
+
+ggplot(df, aes(x=empty_droplet, y=librarysize))+
+  geom_point()
+```
+We need to do the same as above for mitochondrial dna. Need to be calculated the same as we've done yesterday
+```{r}
+
+```
+
+Import the filtered Cell Ranger matrix for 1,000 cells and compare their set of filtered cells.
+#import the filtered matrix
+
+```{r}
+sce_filtered <- read10xCounts("data/pbmc_1k_v3_filtered/", sample.names = "PBMC")
+sce_filtered
+```
+```{r}
+sce <- sce[,which(is.cell)]
+```
+compare cells we got with the filtered data
+
+```{r}
+barcode_raw <- colData(sce)$Barcode
+barcode_filtered <- colData(sce_filtered)$Barcode
+
+length(intersect(barcode_filtered, barcode_raw))
+```
+Outcome of our filtering method is similar to the filtered data
+
+#Removing doublets
+
+```{r}
+sce <- scDblFinder(sce)
+
+sce
+
+View(as.data.frame(colData(sce)))
+```
+
+
+```{r}
+
+df <- data.frame(librarysize = colSums(assay(sce, "counts")), doublets = colData(sce)$scDblFinder.class)
+df
+
+ggplot(df, aes(x=doublets, y=librarysize))+
+  geom_violin()+
+  geom_point()
+```
+#Remove the doublets from the dataset
+
+```{r}
+colData(sce)$scDblFinder.class != "doublet"
+
+sce <- sce[,colData(sce)$scDblFinder.class != "doublet"]
+
+sce
+```
+#Ambient RNA
+
+```{r}
+BiocManager::install("celda")
+```
+identify contamination with ambient rna
+
+```{r}
+sce <- decontX(sce)
+```
+
+```{r}
+assays(sce)$decontXcounts
+
+View(as.data.frame(colData(sce)))
+```
+
+
+Visualise the UMAP layout created by decontx 
+
+```{r}
+reducedDimNames(sce)
+
+class(sce)
+
+plotDimReduceCluster(colData(sce)$decontX_clusters, dim1 = reducedDim(sce)[,"DecontX_UMAP_1"], dim2 = reducedDim(sce)[,"DecontX_UMAP_2"])
+
+
+plotDimReduceCluster(colData(sce)$decontX_clusters, dim1 = reducedDim(sce)[,"DecontX_UMAP_1"], dim2= reducedDim(sce)[,"DecontX_UMAP_2"])
+
+```
+Visualize the percentage of contamination estimated by decontX in each cell. Use the plotDecontXContamination() function
+
+```{r}
+plotDecontXContamination(sce)
+```
+Does any cluster display higher (estimated) levels of ambient RNA?
+25%
+
+
+
+Visualize the log-normalised expression of marker genes on a UMAP layout faceted by gene; use plotDimReduceFeature()
+
+```{r}
+head(rownames(sce))
+
+plotDimReduceFeature(as.matrix(assays(sce)$counts), features = "ENSG00000198851", dim1 = reducedDim(sce)[,"DecontX_UMAP_1"], dim2= reducedDim(sce)[,"DecontX_UMAP_2"])
+```
+
+
+
+

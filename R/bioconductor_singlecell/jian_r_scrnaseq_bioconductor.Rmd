@@ -1,0 +1,149 @@
+---
+title: "r_scrnaseq_bioconductor"
+author: "Jian"
+date: "09/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Restore the project environment
+```{r}
+renv::restore()
+```
+
+
+# Read data by using read10xCounts()
+```{r}
+library(DropletUtils)
+pbmc <- read10xCounts(samples = c('pbmc1k'='./Data/filtered_feature_bc_matrix/')) # 'pbmc1k'='Path', the pbmc1k would be the sample name in the colData
+print(pbmc)
+#assay(pbmc,'counts') #To access the counts matrix
+#assays(pbmc)$counts # This is the same as the above
+```
+
+# Check the colData and find out the sample name
+```{r}
+colData(pbmc)
+```
+
+# Access the metadata and find the path for each sample name
+```{r}
+metadata(pbmc)
+```
+
+
+
+# Compute and visualise quality control metrics using scater
+# QC for each cell
+```{r}
+library(scater)
+library(ggplot2)
+
+qc_cell <- perCellQCMetrics(pbmc)
+qc_cell
+head(qc_cell$sum,n=10)
+plot1 <- ggplot(as.data.frame(qc_cell),aes(percent_top_50))+
+    geom_histogram()
+plot1
+
+plot2 <- ggplot(as.data.frame(qc_cell),aes(sum,percent_top_50))+
+    geom_point()+
+    geom_vline(xintercept=2000)+
+    geom_hline(yintercept = 60)
+plot2
+# From this plot, we might want to filter the cell with total reads/sum of less than 2000
+
+plot3 <- ggplot(as.data.frame(qc_cell),aes(sum,detected,color=percent_top_50))+
+    geom_point()
+plot3
+
+plot1+plot2+plot3
+
+```
+# To identify the mitochondrial genes
+```{r}
+mt_gene <- grep('^MT-',rowData(pbmc)[,'Symbol'])
+#mt_gene <- grep('^MT-',rowData(pbmc)[,'Symbol'],value = TRUE) # The value parameter could return the values in the column
+mt_gene
+```
+
+# Use addPerCellQC() to add the mitochondrial genes in the pbmc dataset
+```{r}
+pbmc <- addPerCellQC(pbmc,subsets=list(MT=mt_gene))
+pbmc
+colData(pbmc)
+
+plot4 <- ggplot(as.data.frame(colData(pbmc)),aes(sum,detected,color=subsets_MT_percent))+
+    geom_point()
+plot4
+```
+
+
+# QC for each feature
+```{r}
+qc_feature <- perFeatureQCMetrics(pbmc)
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+

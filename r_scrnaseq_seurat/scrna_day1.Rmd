@@ -1,0 +1,178 @@
+---
+title: "scrna_day1"
+author: "Ahmed"
+date: "08/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## first step is to load the seurat pckage
+
+```{r}
+library(Seurat)
+library(ggplot2)
+```
+
+#read in the data
+
+```{r}
+seurat.data <- Read10X(data.dir = "filtered_feature_bc_matrix/")
+seurat.data
+```
+#the $ sign above refers to the element of the list
+#Because it is a list, we can use names()
+
+```{r}
+names(seurat.data)
+#we can select certain element of the list by the $ sign
+head(seurat.data$`Gene Expression`)
+tail(seurat.data$`Antibody Capture`)
+#try class function
+class(seurat.data$`Antibody Capture`)
+#comment on the above: dgCMatrix is an efficient way to store a large matrix
+
+rownames(seurat.data$`Antibody Capture`)
+
+#renaming row names, deleting TotalSeqB from the name
+rownames(x = seurat.data[["Antibody Capture"]]) <- gsub(pattern = "_[control_]*TotalSeqB", replacement = "", 
+    x = rownames(x = seurat.data[["Antibody Capture"]]))
+```
+#view new row names
+
+```{r}
+rownames(x = seurat.data[["Antibody Capture"]])
+```
+
+```{r}
+seurat_rna_all <- CreateSeuratObject(counts = seurat.data$`Gene Expression`, project = "pbmc_5k")
+
+head.col
+table(seurat_rna_all@meta.data$orig.ident)
+```
+#normalise the data
+
+```{r}
+pbmc10k <- CreateSeuratObject(counts = seurat.data[["Gene Expression"]], min.cells = 3, min.features = 200)
+```
+
+
+```{r}
+adt_assay <- CreateAssayObject(seurat.data[["Antibody Capture"]][, colnames(seurat_rna_all)])
+adt_assay
+```
+
+```{r}
+seurat_rna_all[["ADT"]] <- adt_assay
+
+seurat_rna_all <- NormalizeData(seurat_rna_all)
+
+head(seurat_rna_all@meta.data)
+```
+
+```{r}
+seurat_rna_all <- NormalizeData(seurat_rna_all, assay = "ADT", normalization.method = "CLR")
+seurat_rna_all
+```
+```{r}
+slotNames(seurat_rna_all)
+```
+
+```{r}
+table(seurat_rna_all@meta.data$orig.ident)
+```
+#get the mitochondrial dna percent
+
+```{r}
+mt.percent <- PercentageFeatureSet(seurat_rna_all, pattern = "^MT-")
+class(mt.percent)
+mt.percent
+
+seurat_rna_all[["percent.mt"]] <- mt.percent
+
+head(seurat_rna_all@meta.data)
+```
+
+#plot the RNA count
+
+```{r}
+ggplot(seurat_rna_all@meta.data, aes(nCount_RNA, nFeature_RNA, color = percent.mt))+
+    geom_point()
+```
+#run PCA
+
+```{r}
+seurat_rna_all <- subset(seurat_rna_all, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+
+seurat_rna_all <- FindVariableFeatures(seurat_rna_all)
+
+#plot1 <- 
+```
+
+```{r}
+all.genes <- rownames(seurat_rna_all)
+seurat_rna_all <- ScaleData(seurat_rna_all, features = all.genes)
+```
+
+
+```{r}
+DefaultAssay(seurat_rna_all)
+```
+
+```{r}
+seurat_rna_all <- RunPCA(seurat_rna_all)
+```
+#show the pCA
+
+```{r}
+seurat_rna_all[["pca"]]
+```
+
+```{r}
+print(seurat_rna_all[["pca"]], dims = 1:5, nfeatures = 5)
+```
+
+```{r}
+seurat_rna_all@reductions$pca
+```
+
+```{r}
+DimPlot(seurat_rna_all, reduction = "pca", dims = c(1, 2))
+```
+
+```{r}
+DimHeatmap(seurat_rna_all, dims=11)
+```
+#Elbow plot
+
+```{r}
+ElbowPlot(seurat_rna_all)
+```
+#clustering
+
+```{r}
+seurat_rna_all <- FindNeighbors(seurat_rna_all, dims = 1:13)
+seurat_rna_all
+```
+
+```{r}
+seurat_rna_all <- FindClusters(seurat_rna_all, resolution = 0.8, verbose = FALSE)
+seurat_rna_all
+View(seurat_rna_all@meta.data)
+plot(seurat_rna_all@meta.data$seurat_clusters)
+```
+
+
+```{r}
+head(Idents(seurat_rna_all))
+DimPlot(seurat_rna_all, reduction = "pca", dims = c(1, 2))
+```
+
+```{r}
+seurat_rna_all <- RunUMAP(seurat_rna_all, dims = 1:13)
+seurat_rna_all
+
+DimPlot(seurat_rna_all, reduction = "umap", dims = c(1, 2))
+```
+

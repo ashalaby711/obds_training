@@ -1,0 +1,246 @@
+---
+title: "bioconductor_singlecell"
+author: "Ahmed"
+date: "09/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(DropletUtils)
+```
+#Load the data
+
+```{r}
+pbmc <- read10xCounts(samples = c('pbmc1k'="./data/filtered_feature_bc_matrix/"))
+```
+
+```{r}
+colData(pbmc)
+```
+Compute and view quality control
+
+```{r}
+library(scater)
+
+qc_feature <- perFeatureQCMetrics(pbmc)
+qc_feature
+```
+
+```{r}
+qc_cell <- perCellQCMetrics(pbmc)
+head(qc_cell$sum, n=10)
+qc_cell
+
+plot1 <- ggplot(as.data.frame(qc_cell), aes(percent_top_50))+
+    geom_histogram()
+    
+plot1
+
+plot2 <- ggplot(as.data.frame(qc_cell),aes(sum,percent_top_50))+
+    geom_point()+
+    geom_vline(xintercept=2000)+
+    geom_hline(yintercept = 60)
+
+plot2
+
+plot3 <- ggplot(as.data.frame(qc_cell),aes(sum,detected,color=percent_top_50))+
+    geom_point()
+plot3
+
+#plot1+plot2+plot3
+```
+#Identify mt genes
+
+```{r}
+mt_gene <- grep('^MT-',rowData(pbmc)[,'Symbol'])
+```
+
+# Use addPerCellQC() to add the mitochondrial genes in the pbmc dataset
+```{r}
+pbmc <- addPerCellQC(pbmc,subsets=list(MT=mt_gene))
+
+colData(pbmc)
+
+plot4 <- ggplot(as.data.frame(colData(pbmc)),aes(sum,detected,color=subsets_MT_percent))+
+    geom_point()
+plot4
+```
+
+
+# QC for each feature
+```{r}
+qc_feature <- perFeatureQCMetrics(pbmc)
+qc_feature
+```
+#To subset:
+```{r}
+metadata(pbmc)
+
+keep_genes <- 1:5
+keep_cells <- 10:50
+
+pbmc_subset <- pbmc[keep_genes, keep_cells]
+
+rowData(pbmc_subset)
+colData(pbmc_subset)
+
+rownames(pbmc) <- rowData(pbmc)$Symbol
+```
+#Normalisation:
+
+```{r}
+
+library(scran)
+pbmc <- logNormCounts(pbmc)
+
+dec.pbmc <- modelGeneVar(pbmc)
+
+fit.pbmc <- metadata(dec.pbmc)
+
+mean(pbmc)
+
+plot(fit.pbmc$mean, fit.pbmc$var, xlab="Mean of log-expression", ylab="variance of log-expression")
+curve(fit.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
+```
+#A more complicated way of doing the step above
+```{r}
+#df <- data.frame(
+    #var = rowVars(as.matrix(assay(pbmc, "logcounts"))),
+    #mean = rowMeans(as.matrix(assay(pbmc, "logcounts")))
+#)
+
+#ggplot(df, aes(mean, var))+
+    #geom_point()+
+    #geom_smooth(color="blue", method= "loess", formula = y ~ x)+
+    #theme_bw()
+```
+#Feature selection: select featurs for downstream analysis i.e. highly variable genes
+
+```{r}
+dec.pbmc
+
+hist(dec.pbmc$total - (dec.pbmc$tech + dec.pbmc$bio), breaks = 1000)
+
+ggplot()+
+    geom_point(aes(mean, bio), as.data.frame(dec.pbmc), color="blue")+
+    geom_hline(yintercept = 0, linetype = "dashed", size = 2, color = "green")
+```
+#Identify highly variable genes
+#biological variance can be due to the different types of cells
+#variation threshld can be changed accordingly i.e. if you didn't get what to expect in clustering
+
+```{r}
+hvgs <- getTopHVGs(dec.pbmc, var.threshold = 0.05, fdr.threshold = 0.05)
+#View(hvgs)
+View(hvgs)
+
+dec.pbmc$gene_id <- rownames(dec.pbmc)
+View(as.data.frame(dec.pbmc))
+#View(as.data.frame(dec.pbmc))
+
+ggplot()+
+    geom_point(aes(mean, bio, color=gene_id %in% hvgs), as.data.frame(dec.pbmc))+
+    geom_hline(yintercept = 0, linetype = "dashed", size = 1, color = "green")
+```
+#Dimensionality reduction
+#Run PCA for the selected genes only
+
+```{r}
+pbmc <- runPCA(pbmc, subset_row= hvgs)
+pbmc
+```
+plot the PCA using elbow plot
+```{r}
+str(reducedDim(pbmc, "PCA"))
+
+
+percent.var <- attr(reducedDim(pbmc), "percentVar")
+plot(percent.var, log="y", xlab="PC", ylab="var")
+```
+
+```{r}
+pbmc <- runUMAP(pbmc, dimred = "PCA", n_dimred = 20)
+reducedDim(pbmc, "UMAP")
+
+pbmc <- runUMAP(pbmc, dimred = "PCA", n_dimred = 20)
+
+
+plotReducedDim(pbmc, dimred = "PCA", colour_by = "sizeFactor")
+
+plotReducedDim(pbmc, dimred = "UMAP", colour_by = "sizeFactor")
+```
+#Clustering
+
+```{r}
+g <- buildSNNGraph(pbmc, use.dimred = 'PCA')
+g
+clust <- igraph::cluster_walktrap(g)$membership
+table(clust)
+```
+
+```{r}
+
+pbmc <- runTSNE(pbmc, dimred = "PCA", n_dimred = 20)
+
+pbmc
+colLabels(pbmc) <- factor(clust)
+plotReducedDim(pbmc, "TSNE", colour_by="label")
+
+```
+#Clustering cells after using a variable number of PCs
+
+```{r}
+output <- scran::getClusteredPCs(reducedDim(pbmc, "PCA"))
+output
+```
+#see what it is suggesting:
+
+```{r}
+metadata(output)$chosen
+```
+the answer is 20 PCs
+
+```{r}
+ggplot(as.data.frame(output), aes(n.pcs, n.clusters))+
+    geom_point()+
+    geom_line()
+```
+the graph above explains why 20 was the chosen answer. We detect more clusters with 20 PCs
+Next, we need to run the PCA with the ideal number of clusters
+
+```{r}
+pbmc <- runPCA(pbmc, subset_row=hvgs, ncomponents=20)
+dim(reducedDim(pbmc, "PCA"))
+```
+
+
+
+
+
+```{r}
+g <- buildSNNGraph(pbmc, use.dimred = "PCA")
+g
+
+cluster_walktrap <- igraph::cluster_walktrap(g)
+table(cluster_walktrap$membership)
+
+
+library(igraph)
+
+
+
+```
+
+```{r}
+plotUMAP(pbmc, colour_by="label")
+```
+
+```{r}
+out <- scran::findMarkers(pbmc, groups=pbmc$label, test.type="wilcox")
+out
+```
+

@@ -1,0 +1,199 @@
+---
+title: "Integration"
+author: "Ahmed"
+date: "11/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import 2 RDS files
+
+```{r}
+library(Seurat)
+
+pbmcv2 <- readRDS(file="data/pbmcv2_filtered.rds")
+pbmcv3 <- readRDS(file = "data/pbmcv3_filtered.rds")
+
+View(v2@meta.data)
+View(v3@meta.data)
+```
+
+Create a merged Seurat object
+
+```{r}
+pbmc.combined <- merge(pbmcv2, y=pbmcv3, add.cell.ids = c("v2", "v3"), project = "PBMC")
+
+pbmc.combined
+```
+#Normalisation
+
+```{r}
+pbmc.combined <- NormalizeData(object = pbmc.combined, normalization.method = "LogNormalize", scale.factor = 10000)
+```
+
+```{r}
+pbmc.combined[["percent.mt"]] <- PercentageFeatureSet(pbmc.combined, pattern = "^MT-")
+
+```
+#Visualise QC metrics as violin plot
+
+```{r}
+VlnPlot(pbmc.combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+#Find variable genes
+
+```{r}
+pbmc.combined <- FindVariableFeatures(pbmc.combined, selection.method = "vst", nfeatures = 2000)
+
+#top 10 highly variable genes:
+
+top10 <- head(VariableFeatures(pbmc.combined), 10)
+top10
+
+#plot variables genes with labels
+
+plot1 <- VariableFeaturePlot(pbmc.combined)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1
+```
+#Scale the data. get all genes names first, then scale the data so that mean expression is 0 and variance is 1.
+
+```{r}
+all.genes <- rownames(pbmc.combined)
+pbmc.combined <- ScaleData(pbmc.combined, features = all.genes)
+
+
+```
+Perform linear dimensional reduction
+
+```{r}
+pbmc.combined <- RunPCA(pbmc.combined, features = VariableFeatures(object = pbmc.combined))
+```
+```{r}
+
+```
+
+pbmc.combined <- RunUMAP(pbmc.combined, features = VariableFeatures(object = pbmc.combined))
+
+#Visualise the results
+
+```{r}
+DimPlot(pbmc.combined)
+
+```
+
+
+
+```{r}
+DimHeatmap(pbmc.combined, dims = 1, cells = 500, balanced = TRUE)
+```
+
+```{r}
+VizDimLoadings(pbmc.combined, dims=1:2, reduction = "pca")
+```
+
+```{r}
+ElbowPlot(pbmc.combined)
+```
+#Clustering
+
+```{r}
+pbmc.combined <- FindNeighbors(pbmc.combined, dims = 1:10)
+pbmc.combined <- FindClusters(pbmc.combined, resolution = 0.5)
+```
+#Determine the dimensionality of the dataset
+
+```{r}
+pbmc.combined <- JackStraw(pbmc.combined, num.replicate = 100)
+pbmc.combined <- ScoreJackStraw(pbmc.combined, dims = 1:20)
+```
+Plot JackStraw
+
+```{r}
+JackStrawPlot(pbmc.combined)
+```
+
+```{r}
+pbmc.combined <- RunUMAP(pbmc.combined, features = VariableFeatures(object = pbmc.combined))
+
+DimPlot(pbmc.combined, reduction = "umap", group.by= "orig.ident", label = TRUE)
+
+clustermarkers1 <- FindMarkers(pbmc.combined, ident.1 = 2, min.pct = 0.25)
+
+head(clustermarkers1)
+```
+Exercise 2:
+#Integration method 1:
+
+```{r}
+
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+
+
+pbmc.list <- SplitObject(pbmc.combined, split.by = "orig.ident")
+names(pbmc.list)
+
+
+features <- SelectIntegrationFeatures(object.list = pbmc.list)
+
+anchors <- FindIntegrationAnchors(object.list = pbmc.list, anchor.features = features)
+anchors
+
+integrated_pbmc <- IntegrateData(anchorset = anchors)
+
+DefaultAssay(integrated_pbmc) <- "integrated"
+```
+#Run the workflow
+#Scaling
+
+```{r}
+
+integrated_pbmc <- ScaleData(integrated_pbmc, npcs=30, verbose = FALSE)
+
+#run PCA
+integrated_pbmc <- RunPCA(integrated_pbmc, features = VariableFeatures(object = integrated_pbmc))
+
+```
+plot
+
+```{r}
+DimPlot(integrated_pbmc)
+```
+
+
+```{r}
+integrated_pbmc <- RunUMAP(integrated_pbmc, features = VariableFeatures(object = integrated_pbmc))
+
+DimPlot(integrated_pbmc, reduction = "umap", group.by= "orig.ident", label = TRUE)
+```
+#Perform clustering
+
+```{r}
+integrated_pbmc <- FindNeighbors(integrated_pbmc, dims = 1:10)
+integrated_pbmc <- FindClusters(integrated_pbmc, resolution = 0.5)
+```
+
+```{r}
+DefaultAssay(integrated_pbmc) <- "RNA"
+
+clustermarkers2 <- FindMarkers(integrated_pbmc, ident.1 = 2, min.pct = 0.25)
+
+head(clustermarkers2, n=10)
+```
+BiocManager::install('multtest')
+
+```{r}
+
+BiocManager::install('multtest')
+install.packages('metap')
+nk.markers <- FindConservedMarkers(integrated_pbmc, ident.1 = 6, grouping.var = "orig.ident", verbose = FALSE)
+head(nk.markers)
+
+FeaturePlot(integrated_pbmc, features = c("IGHG1", "TNFRSF13B", "CLECL1", "IGHG3"))
+```
+
